@@ -51,6 +51,12 @@
         <textarea id="description" rows="5" placeholder="What happened? Include the location and when it occurs."></textarea>
         <p class="hint">At least 10 characters.</p>
       </div>
+      <div class="field">
+        <label class="check" for="is_anonymous">
+          <input type="checkbox" id="is_anonymous" />
+          Submit anonymously (admins won't see my name or email)
+        </label>
+      </div>
       <button id="submit" class="btn btn-primary btn-block">Submit complaint</button>
       <p id="form-msg" class="msg" role="status" aria-live="polite"></p>
     </section>
@@ -77,10 +83,14 @@
   document.getElementById('logout').onclick = logout;
 
   function complaintItem(c) {
+    const badges = el('div', { class: 'c-badges' });
+    if (c.is_anonymous) badges.append(el('span', { class: 'badge badge-anon', text: 'Anonymous' }));
+    badges.append(badge(c.status));
+
     const item = el('div', { class: 'complaint' }, [
       el('div', { class: 'c-head' }, [
         el('span', { class: 'c-title', text: c.title }),
-        badge(c.status)
+        badges
       ]),
       el('div', { class: 'c-meta' }, [
         el('span', { class: 'mono', text: '#' + c.id }),
@@ -146,12 +156,14 @@
         body: {
           title: document.getElementById('title').value.trim(),
           category: document.getElementById('category').value,
-          description: document.getElementById('description').value.trim()
+          description: document.getElementById('description').value.trim(),
+          is_anonymous: document.getElementById('is_anonymous').checked
         }
       });
       showMsg(msg, 'Complaint submitted.', false);
       document.getElementById('title').value = '';
       document.getElementById('description').value = '';
+      document.getElementById('is_anonymous').checked = false;
       load();
     } catch (err) { showMsg(msg, err.message, true); }
   });

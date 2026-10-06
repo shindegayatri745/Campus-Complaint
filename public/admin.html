@@ -96,8 +96,8 @@
 
     tr.append(el('td', { class: 'mono', text: String(c.id) }));
     tr.append(el('td', {}, [
-      el('span', { class: 'cell-name', text: c.student_name }),
-      el('small', { class: 'cell-sub', text: c.student_email })
+      el('span', { class: 'cell-name' + (c.is_anonymous ? ' is-anon' : ''), text: c.student_name }),
+      el('small', { class: 'cell-sub', text: c.student_email || '-' })
     ]));
     tr.append(el('td', { class: 'cell-title', text: c.title }));
     tr.append(el('td', { text: c.category }));

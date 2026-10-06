@@ -43,6 +43,18 @@ function studentOnly(req, res, next) {
 // ---------- helpers ----------
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const sign = (user) => jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '1d' });
+// accept true / 'true' / 1 / '1' / 'on' / 'yes' (multipart bodies are strings)
+const truthy = (v) => v === true || v === 1 || (typeof v === 'string' && ['true', '1', 'on', 'yes'].includes(v.toLowerCase()));
+
+// Columns a student sees for their own complaints
+const MINE_SQL = `SELECT id, title, category, description, status, admin_remark, created_at, is_anonymous
+                  FROM complaints`;
+// Columns an admin sees: never user_id; anonymous rows show 'Anonymous' and a NULL email
+const ADMIN_SQL = `SELECT c.id, c.title, c.category, c.description, c.status, c.admin_remark, c.created_at,
+                          c.is_anonymous,
+                          CASE WHEN c.is_anonymous = 1 THEN 'Anonymous' ELSE c.student_name END AS student_name,
+                          CASE WHEN c.is_anonymous = 1 THEN NULL ELSE u.email END AS student_email
+                   FROM complaints c JOIN users u ON u.id = c.user_id`;
 
 // ---------- auth routes ----------
 app.post('/api/register', (req, res) => {
@@ -84,30 +96,56 @@ app.post('/api/complaints', auth, studentOnly, (req, res) => {
   if (!CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be one of: ' + CATEGORIES.join(', ') });
   if (!description || description.trim().length < 10) return res.status(400).json({ error: 'Description must be at least 10 chars' });
 
-  const info = db.prepare('INSERT INTO complaints (user_id, title, category, description) VALUES (?, ?, ?, ?)')
-    .run(req.user.id, title.trim(), category, description.trim());
-  const row = db.prepare('SELECT * FROM complaints WHERE id = ?').get(info.lastInsertRowid);
+  const isAnon = truthy((req.body || {}).is_anonymous) ? 1 : 0;
+  // student_name always comes from our own users table - never from the client
+  const me = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
+
+  const info = db.prepare(`INSERT INTO complaints (user_id, title, category, description, is_anonymous, student_name)
+                           VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(req.user.id, title.trim(), category, description.trim(), isAnon, me.name);
+  const row = db.prepare(`${MINE_SQL} WHERE id = ?`).get(info.lastInsertRowid);
   res.status(201).json(row);
 });
 
 // Student: list own complaints
 app.get('/api/complaints/mine', auth, studentOnly, (req, res) => {
-  const rows = db.prepare('SELECT * FROM complaints WHERE user_id = ? ORDER BY id DESC').all(req.user.id);
+  const rows = db.prepare(`${MINE_SQL} WHERE user_id = ? ORDER BY id DESC`).all(req.user.id);
   res.json(rows);
 });
 
-// Admin: list all complaints, optional filter ?status=Pending
+// Admin: list all complaints, optional filters ?status= and ?category=
 app.get('/api/complaints', auth, adminOnly, (req, res) => {
-  const { status } = req.query;
+  const { status, category } = req.query;
   if (status !== undefined && !STATUSES.includes(status))
     return res.status(400).json({ error: 'status must be one of: ' + STATUSES.join(', ') });
+  if (category !== undefined && !CATEGORIES.includes(category))
+    return res.status(400).json({ error: 'category must be one of: ' + CATEGORIES.join(', ') });
 
-  const sql = `SELECT c.*, u.name AS student_name, u.email AS student_email
-               FROM complaints c JOIN users u ON u.id = c.user_id
-               ${status ? 'WHERE c.status = ?' : ''}
-               ORDER BY c.id DESC`;
-  const rows = status ? db.prepare(sql).all(status) : db.prepare(sql).all();
+  // parameterized filters
+  const where = [];
+  const params = [];
+  if (status !== undefined) { where.push('c.status = ?'); params.push(status); }
+  if (category !== undefined) { where.push('c.category = ?'); params.push(category); }
+
+  const rows = db.prepare(ADMIN_SQL + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ORDER BY c.id DESC')
+    .all(...params);
   res.json(rows);
+});
+
+// Complaint detail: admin gets the sanitized row, a student only their own (404 otherwise)
+app.get('/api/complaints/:id', auth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+
+  if (req.user.role === 'admin') {
+    const row = db.prepare(ADMIN_SQL + ' WHERE c.id = ?').get(id);
+    if (!row) return res.status(404).json({ error: 'Complaint not found' });
+    return res.json(row);
+  }
+
+  const row = db.prepare(`${MINE_SQL} WHERE id = ? AND user_id = ?`).get(id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Complaint not found' }); // also hides other students' rows
+  res.json(row);
 });
 
 // Admin: update status + admin_remark
@@ -134,7 +172,8 @@ app.patch('/api/complaints/:id', auth, adminOnly, (req, res) => {
   values.push(id);
 
   db.prepare(`UPDATE complaints SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  res.json(db.prepare('SELECT * FROM complaints WHERE id = ?').get(id));
+  // minimal response - never echo user_id or student identity
+  res.json(db.prepare('SELECT id, status, admin_remark FROM complaints WHERE id = ?').get(id));
 });
 
 // error handler (keeps crashes quiet and returns JSON)
