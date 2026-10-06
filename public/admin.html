@@ -4,46 +4,69 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin | Campus Complaint System</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20fill='%2314514A'%20d='M12%202l8%203.5v6.2C20%2017%2016.6%2021%2012%2022.5%207.4%2021%204%2017%204%2011.7V5.5L12%202z'/%3E%3Cpath%20fill='none'%20stroke='%23fff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%20d='M8.5%2012l2.5%202.5%204.5-5'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<header>
-  <h1>All Complaints (Admin)</h1>
-  <div>
-    <span class="who" id="who"></span>
-    <button class="small ghost" id="logout">Logout</button>
+<header class="navbar">
+  <div class="navbar-inner">
+    <a class="brand" href="admin.html">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.2-2.9 7.7-7 9-4.1-1.3-7-4.8-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      Campus Complaints
+    </a>
+    <div class="nav-user">
+      <span id="who"></span>
+      <button id="logout" class="btn btn-onnav btn-sm">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>
+        Logout
+      </button>
+    </div>
   </div>
 </header>
 
 <main>
+  <div class="page-head">
+    <div>
+      <h1>All complaints</h1>
+      <p class="page-sub">Review incoming issues, update status and leave remarks for students.</p>
+    </div>
+  </div>
+
+  <!-- summary tiles -->
+  <div class="stats">
+    <div class="stat s-pending"><span class="stat-num" id="count-pending">0</span><span class="stat-label">Pending</span></div>
+    <div class="stat s-in-progress"><span class="stat-num" id="count-in-progress">0</span><span class="stat-label">In Progress</span></div>
+    <div class="stat s-resolved"><span class="stat-num" id="count-resolved">0</span><span class="stat-label">Resolved</span></div>
+    <div class="stat s-rejected"><span class="stat-num" id="count-rejected">0</span><span class="stat-label">Rejected</span></div>
+  </div>
+
   <section class="card">
-    <div class="head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-      <h2 style="margin:0;">Complaints</h2>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <label for="filter" style="margin:0;">Status</label>
-        <select id="filter" style="width:auto;">
-          <option value="">All</option>
-          <option>Pending</option>
-          <option>In Progress</option>
-          <option>Resolved</option>
-          <option>Rejected</option>
-        </select>
-        <button class="small" id="refresh">Refresh</button>
-      </div>
+    <div class="filterbar">
+      <label for="filter">Status</label>
+      <select id="filter">
+        <option value="">All statuses</option>
+        <option>Pending</option>
+        <option>In Progress</option>
+        <option>Resolved</option>
+        <option>Rejected</option>
+      </select>
+      <button id="refresh" class="btn btn-secondary btn-sm">Refresh</button>
+      <span class="count" id="result-count"></span>
     </div>
 
-    <div class="table-wrap" style="margin-top:12px;">
+    <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>ID</th><th>Student</th><th>Title</th><th>Category</th>
-            <th>Description</th><th>Created</th><th>Status</th><th>Admin remark</th><th></th>
+            <th>Description</th><th>Created</th><th>Status</th><th>Admin remark</th>
+            <th><span class="sr-only">Action</span></th>
           </tr>
         </thead>
-        <tbody id="rows"><tr><td colspan="9">Loading...</td></tr></tbody>
+        <tbody id="rows"><tr><td colspan="9" class="table-msg">Loading...</td></tr></tbody>
       </table>
     </div>
-    <p id="msg" class="msg"></p>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
   </section>
 </main>
 
@@ -53,34 +76,83 @@
   if (user) { document.getElementById('who').textContent = user.name; load(); }
 
   document.getElementById('logout').onclick = logout;
-  document.getElementById('refresh').onclick = load;
+  document.getElementById('refresh').onclick = e => busy(e.currentTarget, load);
   document.getElementById('filter').onchange = load;
+
+  const idFor = s => 'count-' + s.toLowerCase().replace(/\s+/g, '-');
+
+  function renderStats(all) {
+    const counts = {};
+    STATUSES.forEach(s => counts[s] = 0);
+    all.forEach(c => { if (counts[c.status] !== undefined) counts[c.status]++; });
+    STATUSES.forEach(s => {
+      const node = document.getElementById(idFor(s));
+      if (node) node.textContent = counts[s];
+    });
+  }
+
+  function rowEl(c) {
+    const tr = el('tr', { attrs: { 'data-id': String(c.id) } });
+
+    tr.append(el('td', { class: 'mono', text: String(c.id) }));
+    tr.append(el('td', {}, [
+      el('span', { class: 'cell-name', text: c.student_name }),
+      el('small', { class: 'cell-sub', text: c.student_email })
+    ]));
+    tr.append(el('td', { class: 'cell-title', text: c.title }));
+    tr.append(el('td', { text: c.category }));
+    tr.append(el('td', { class: 'cell-desc', text: c.description }));
+    tr.append(el('td', { class: 'mono', text: c.created_at }));
+
+    const sel = el('select', { class: 'st', attrs: { 'aria-label': 'Status for complaint ' + c.id } });
+    STATUSES.forEach(s => {
+      const opt = el('option', { text: s });
+      if (s === c.status) opt.selected = true;
+      sel.append(opt);
+    });
+    tr.append(el('td', { class: 'status-cell' }, [badge(c.status), sel]));
+
+    const rm = el('input', {
+      class: 'rm',
+      attrs: { type: 'text', placeholder: 'Add a remark', 'aria-label': 'Admin remark for complaint ' + c.id }
+    });
+    rm.value = c.admin_remark || '';
+    tr.append(el('td', {}, [rm]));
+
+    const btn = el('button', { class: 'btn btn-primary btn-sm save', text: 'Save' });
+    btn.onclick = () => busy(btn, () => save(tr));
+    tr.append(el('td', {}, [btn]));
+
+    return tr;
+  }
 
   async function load() {
     const body = document.getElementById('rows');
     const status = document.getElementById('filter').value;
+    body.replaceChildren(el('tr', {}, [el('td', { class: 'table-msg', attrs: { colspan: '9' }, text: 'Loading...' })]));
     try {
-      const rows = await api('/api/complaints' + (status ? '?status=' + encodeURIComponent(status) : ''));
-      if (!rows.length) { body.innerHTML = '<tr><td colspan="9">No complaints found.</td></tr>'; return; }
-      body.innerHTML = rows.map(c => `
-        <tr data-id="${c.id}">
-          <td>${c.id}</td>
-          <td>${esc(c.student_name)}<br><small>${esc(c.student_email)}</small></td>
-          <td>${esc(c.title)}</td>
-          <td>${esc(c.category)}</td>
-          <td class="cell-desc">${esc(c.description)}</td>
-          <td>${esc(c.created_at)}</td>
-          <td>
-            <select class="st">
-              ${STATUSES.map(s => `<option ${s === c.status ? 'selected' : ''}>${s}</option>`).join('')}
-            </select>
-          </td>
-          <td><input class="rm" type="text" value="${esc(c.admin_remark || '')}" placeholder="Remark" /></td>
-          <td><button class="small save">Save</button></td>
-        </tr>`).join('');
+      // same endpoints as before; second call only needed for tiles while filtered
+      const filtered = status ? '?status=' + encodeURIComponent(status) : '';
+      const [rows, all] = status
+        ? await Promise.all([api('/api/complaints' + filtered), api('/api/complaints')])
+        : await api('/api/complaints').then(r => [r, r]);
 
-      body.querySelectorAll('.save').forEach(btn => btn.onclick = () => save(btn.closest('tr')));
-    } catch (e) { body.innerHTML = `<tr><td colspan="9">${esc(e.message)}</td></tr>`; }
+      renderStats(all);
+      document.getElementById('result-count').textContent =
+        rows.length + (rows.length === 1 ? ' complaint' : ' complaints');
+
+      if (!rows.length) {
+        body.replaceChildren(el('tr', {}, [
+          el('td', { class: 'table-msg', attrs: { colspan: '9' }, text: 'No complaints found.' })
+        ]));
+        return;
+      }
+      body.replaceChildren(...rows.map(rowEl));
+    } catch (e) {
+      body.replaceChildren(el('tr', {}, [
+        el('td', { class: 'table-msg', attrs: { colspan: '9' }, text: e.message })
+      ]));
+    }
   }
 
   async function save(tr) {

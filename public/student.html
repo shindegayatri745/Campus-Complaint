@@ -4,36 +4,63 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>My Complaints | Campus Complaint System</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20fill='%2314514A'%20d='M12%202l8%203.5v6.2C20%2017%2016.6%2021%2012%2022.5%207.4%2021%204%2017%204%2011.7V5.5L12%202z'/%3E%3Cpath%20fill='none'%20stroke='%23fff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%20d='M8.5%2012l2.5%202.5%204.5-5'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<header>
-  <h1>My Complaints</h1>
-  <div>
-    <span class="who" id="who"></span>
-    <button class="small ghost" id="logout">Logout</button>
+<header class="navbar">
+  <div class="navbar-inner">
+    <a class="brand" href="student.html">
+      <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.2-2.9 7.7-7 9-4.1-1.3-7-4.8-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      Campus Complaints
+    </a>
+    <div class="nav-user">
+      <span id="who"></span>
+      <button id="logout" class="btn btn-onnav btn-sm">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>
+        Logout
+      </button>
+    </div>
   </div>
 </header>
 
 <main>
-  <!-- new complaint form -->
-  <section class="card">
-    <h2>Raise a complaint</h2>
-    <label for="title">Title</label>
-    <input id="title" type="text" placeholder="Short summary (min 4 chars)" />
-    <label for="category">Category</label>
-    <select id="category"></select>
-    <label for="description">Description</label>
-    <textarea id="description" rows="4" placeholder="Describe the issue (min 10 chars)"></textarea>
-    <button id="submit">Submit Complaint</button>
-    <p id="form-msg" class="msg"></p>
-  </section>
+  <div class="page-head">
+    <div>
+      <h1>My complaints</h1>
+      <p class="page-sub">Raise an issue and track it until it is resolved.</p>
+    </div>
+    <span class="count-pill" id="count">0 complaints</span>
+  </div>
 
-  <!-- my complaints -->
-  <section class="card">
-    <h2>My complaints</h2>
-    <div id="list"><p class="empty">Loading...</p></div>
-  </section>
+  <div class="student-grid">
+    <!-- new complaint form -->
+    <section class="card form-card">
+      <h2>New complaint</h2>
+      <div class="field">
+        <label for="title">Title</label>
+        <input id="title" type="text" placeholder="e.g. Broken window in Room 104" />
+        <p class="hint">At least 4 characters.</p>
+      </div>
+      <div class="field">
+        <label for="category">Category</label>
+        <select id="category"></select>
+      </div>
+      <div class="field">
+        <label for="description">Description</label>
+        <textarea id="description" rows="5" placeholder="What happened? Include the location and when it occurs."></textarea>
+        <p class="hint">At least 10 characters.</p>
+      </div>
+      <button id="submit" class="btn btn-primary btn-block">Submit complaint</button>
+      <p id="form-msg" class="msg" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- my complaints -->
+    <section class="card">
+      <h2>My complaints</h2>
+      <div id="list"></div>
+    </section>
+  </div>
 </main>
 
 <script src="app.js"></script>
@@ -43,31 +70,75 @@
     document.getElementById('who').textContent = user.name + ' (' + user.email + ')';
     // fill categories from shared list
     const cat = document.getElementById('category');
-    cat.innerHTML = CATEGORIES.map(c => `<option>${c}</option>`).join('');
+    CATEGORIES.forEach(c => cat.append(el('option', { text: c })));
     load();
   }
 
   document.getElementById('logout').onclick = logout;
 
-  async function load() {
-    const list = document.getElementById('list');
-    try {
-      const rows = await api('/api/complaints/mine');
-      if (!rows.length) { list.innerHTML = '<p class="empty">No complaints yet.</p>'; return; }
-      list.innerHTML = rows.map(c => `
-        <div class="complaint">
-          <div class="head">
-            <span class="title">${esc(c.title)}</span>
-            ${badge(c.status)}
-          </div>
-          <div class="meta">#${c.id} &middot; ${esc(c.category)} &middot; ${esc(c.created_at)}</div>
-          <p class="desc">${esc(c.description)}</p>
-          ${c.admin_remark ? `<div class="remark"><strong>Admin remark:</strong> ${esc(c.admin_remark)}</div>` : ''}
-        </div>`).join('');
-    } catch (e) { list.innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+  function complaintItem(c) {
+    const item = el('div', { class: 'complaint' }, [
+      el('div', { class: 'c-head' }, [
+        el('span', { class: 'c-title', text: c.title }),
+        badge(c.status)
+      ]),
+      el('div', { class: 'c-meta' }, [
+        el('span', { class: 'mono', text: '#' + c.id }),
+        el('span', { text: c.category }),
+        el('span', { class: 'mono', text: c.created_at })
+      ]),
+      el('p', { class: 'c-desc', text: c.description })
+    ]);
+    if (c.admin_remark) {
+      item.append(el('div', { class: 'remark' }, [
+        icon('info'),
+        el('div', {}, [
+          el('strong', { text: 'Admin remark' }),
+          el('span', { text: c.admin_remark })
+        ])
+      ]));
+    }
+    return item;
   }
 
-  document.getElementById('submit').onclick = async () => {
+  function emptyState(title, sub) {
+    return el('div', { class: 'empty-state' }, [
+      icon('doc'),
+      el('p', { class: 'empty-title', text: title }),
+      el('p', { class: 'empty-sub', text: sub })
+    ]);
+  }
+
+  function skeletonList(n) {
+    const wrap = el('div', { class: 'skel-list' });
+    for (let i = 0; i < n; i++) {
+      wrap.append(el('div', { class: 'skel-item' }, [
+        el('div', { class: 'skel', attrs: { style: 'width:45%;height:16px' } }),
+        el('div', { class: 'skel', attrs: { style: 'width:80%;height:12px' } }),
+        el('div', { class: 'skel', attrs: { style: 'width:65%;height:12px' } })
+      ]));
+    }
+    return wrap;
+  }
+
+  async function load() {
+    const list = document.getElementById('list');
+    list.replaceChildren(skeletonList(2));
+    try {
+      const rows = await api('/api/complaints/mine');
+      document.getElementById('count').textContent =
+        rows.length + (rows.length === 1 ? ' complaint' : ' complaints');
+      if (!rows.length) {
+        list.replaceChildren(emptyState('No complaints yet', 'Use the form to raise your first complaint.'));
+        return;
+      }
+      list.replaceChildren(...rows.map(complaintItem));
+    } catch (e) {
+      list.replaceChildren(emptyState('Could not load complaints', e.message));
+    }
+  }
+
+  document.getElementById('submit').onclick = e => busy(e.currentTarget, async () => {
     const msg = document.getElementById('form-msg');
     try {
       await api('/api/complaints', {
@@ -82,8 +153,8 @@
       document.getElementById('title').value = '';
       document.getElementById('description').value = '';
       load();
-    } catch (e) { showMsg(msg, e.message, true); }
-  };
+    } catch (err) { showMsg(msg, err.message, true); }
+  });
 </script>
 </body>
 </html>
