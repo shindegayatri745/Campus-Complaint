@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin | Campus Complaint System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>All Complaints (Admin)</h1>
+  <div>
+    <span class="who" id="who"></span>
+    <button class="small ghost" id="logout">Logout</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <h2 style="margin:0;">Complaints</h2>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label for="filter" style="margin:0;">Status</label>
+        <select id="filter" style="width:auto;">
+          <option value="">All</option>
+          <option>Pending</option>
+          <option>In Progress</option>
+          <option>Resolved</option>
+          <option>Rejected</option>
+        </select>
+        <button class="small" id="refresh">Refresh</button>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>Student</th><th>Title</th><th>Category</th>
+            <th>Description</th><th>Created</th><th>Status</th><th>Admin remark</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="9">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <p id="msg" class="msg"></p>
+  </section>
+</main>
+
+<script src="app.js"></script>
+<script>
+  const user = requireRole('admin');
+  if (user) { document.getElementById('who').textContent = user.name; load(); }
+
+  document.getElementById('logout').onclick = logout;
+  document.getElementById('refresh').onclick = load;
+  document.getElementById('filter').onchange = load;
+
+  async function load() {
+    const body = document.getElementById('rows');
+    const status = document.getElementById('filter').value;
+    try {
+      const rows = await api('/api/complaints' + (status ? '?status=' + encodeURIComponent(status) : ''));
+      if (!rows.length) { body.innerHTML = '<tr><td colspan="9">No complaints found.</td></tr>'; return; }
+      body.innerHTML = rows.map(c => `
+        <tr data-id="${c.id}">
+          <td>${c.id}</td>
+          <td>${esc(c.student_name)}<br><small>${esc(c.student_email)}</small></td>
+          <td>${esc(c.title)}</td>
+          <td>${esc(c.category)}</td>
+          <td class="cell-desc">${esc(c.description)}</td>
+          <td>${esc(c.created_at)}</td>
+          <td>
+            <select class="st">
+              ${STATUSES.map(s => `<option ${s === c.status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+          </td>
+          <td><input class="rm" type="text" value="${esc(c.admin_remark || '')}" placeholder="Remark" /></td>
+          <td><button class="small save">Save</button></td>
+        </tr>`).join('');
+
+      body.querySelectorAll('.save').forEach(btn => btn.onclick = () => save(btn.closest('tr')));
+    } catch (e) { body.innerHTML = `<tr><td colspan="9">${esc(e.message)}</td></tr>`; }
+  }
+
+  async function save(tr) {
+    const msg = document.getElementById('msg');
+    const id = tr.dataset.id;
+    try {
+      await api('/api/complaints/' + id, {
+        method: 'PATCH',
+        body: {
+          status: tr.querySelector('.st').value,
+          admin_remark: tr.querySelector('.rm').value.trim()
+        }
+      });
+      showMsg(msg, 'Complaint #' + id + ' updated.', false);
+      load(); // refresh so status filter/badges stay accurate
+    } catch (e) { showMsg(msg, e.message, true); }
+  }
+</script>
+</body>
+</html>

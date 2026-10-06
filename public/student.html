@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Complaints | Campus Complaint System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>My Complaints</h1>
+  <div>
+    <span class="who" id="who"></span>
+    <button class="small ghost" id="logout">Logout</button>
+  </div>
+</header>
+
+<main>
+  <!-- new complaint form -->
+  <section class="card">
+    <h2>Raise a complaint</h2>
+    <label for="title">Title</label>
+    <input id="title" type="text" placeholder="Short summary (min 4 chars)" />
+    <label for="category">Category</label>
+    <select id="category"></select>
+    <label for="description">Description</label>
+    <textarea id="description" rows="4" placeholder="Describe the issue (min 10 chars)"></textarea>
+    <button id="submit">Submit Complaint</button>
+    <p id="form-msg" class="msg"></p>
+  </section>
+
+  <!-- my complaints -->
+  <section class="card">
+    <h2>My complaints</h2>
+    <div id="list"><p class="empty">Loading...</p></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+<script>
+  const user = requireRole('student');
+  if (user) {
+    document.getElementById('who').textContent = user.name + ' (' + user.email + ')';
+    // fill categories from shared list
+    const cat = document.getElementById('category');
+    cat.innerHTML = CATEGORIES.map(c => `<option>${c}</option>`).join('');
+    load();
+  }
+
+  document.getElementById('logout').onclick = logout;
+
+  async function load() {
+    const list = document.getElementById('list');
+    try {
+      const rows = await api('/api/complaints/mine');
+      if (!rows.length) { list.innerHTML = '<p class="empty">No complaints yet.</p>'; return; }
+      list.innerHTML = rows.map(c => `
+        <div class="complaint">
+          <div class="head">
+            <span class="title">${esc(c.title)}</span>
+            ${badge(c.status)}
+          </div>
+          <div class="meta">#${c.id} &middot; ${esc(c.category)} &middot; ${esc(c.created_at)}</div>
+          <p class="desc">${esc(c.description)}</p>
+          ${c.admin_remark ? `<div class="remark"><strong>Admin remark:</strong> ${esc(c.admin_remark)}</div>` : ''}
+        </div>`).join('');
+    } catch (e) { list.innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+  }
+
+  document.getElementById('submit').onclick = async () => {
+    const msg = document.getElementById('form-msg');
+    try {
+      await api('/api/complaints', {
+        method: 'POST',
+        body: {
+          title: document.getElementById('title').value.trim(),
+          category: document.getElementById('category').value,
+          description: document.getElementById('description').value.trim()
+        }
+      });
+      showMsg(msg, 'Complaint submitted.', false);
+      document.getElementById('title').value = '';
+      document.getElementById('description').value = '';
+      load();
+    } catch (e) { showMsg(msg, e.message, true); }
+  };
+</script>
+</body>
+</html>

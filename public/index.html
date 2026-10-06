@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login | Campus Complaint System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>Campus Complaint System</h1>
+  <span class="who">Sign in or create an account</span>
+</header>
+
+<main>
+  <div class="grid two">
+    <!-- Login -->
+    <section class="card">
+      <h2>Login</h2>
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" placeholder="you@campus.com" autocomplete="email" />
+      <label for="login-pass">Password</label>
+      <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+      <button id="login-btn">Login</button>
+      <p id="login-msg" class="msg"></p>
+    </section>
+
+    <!-- Register -->
+    <section class="card">
+      <h2>Register (student)</h2>
+      <label for="reg-name">Name</label>
+      <input id="reg-name" type="text" placeholder="Full name" />
+      <label for="reg-email">Email</label>
+      <input id="reg-email" type="email" placeholder="you@campus.com" />
+      <label for="reg-pass">Password</label>
+      <input id="reg-pass" type="password" placeholder="min 6 characters" autocomplete="new-password" />
+      <button id="reg-btn">Register</button>
+      <p id="reg-msg" class="msg"></p>
+    </section>
+  </div>
+</main>
+
+<script src="app.js"></script>
+<script>
+  // already signed in? go straight to the right page
+  const existing = getUser();
+  if (localStorage.getItem(TOKEN_KEY) && existing) {
+    location.href = existing.role === 'admin' ? 'admin.html' : 'student.html';
+  }
+
+  function goByRole(user, token) {
+    saveSession(token, user);
+    location.href = user.role === 'admin' ? 'admin.html' : 'student.html';
+  }
+
+  document.getElementById('login-btn').onclick = async () => {
+    const msg = document.getElementById('login-msg');
+    try {
+      const data = await api('/api/login', {
+        method: 'POST',
+        body: {
+          email: document.getElementById('login-email').value.trim(),
+          password: document.getElementById('login-pass').value
+        }
+      });
+      goByRole(data.user, data.token);
+    } catch (e) { showMsg(msg, e.message, true); }
+  };
+
+  document.getElementById('reg-btn').onclick = async () => {
+    const msg = document.getElementById('reg-msg');
+    try {
+      const data = await api('/api/register', {
+        method: 'POST',
+        body: {
+          name: document.getElementById('reg-name').value.trim(),
+          email: document.getElementById('reg-email').value.trim(),
+          password: document.getElementById('reg-pass').value
+        }
+      });
+      goByRole(data.user, data.token);
+    } catch (e) { showMsg(msg, e.message, true); }
+  };
+
+  // allow Enter key to submit
+  document.querySelectorAll('input').forEach(i =>
+    i.addEventListener('keydown', e => { if (e.key === 'Enter') i.closest('.card').querySelector('button').click(); }));
+</script>
+</body>
+</html>

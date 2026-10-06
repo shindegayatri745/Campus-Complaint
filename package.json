@@ -1,0 +1,16 @@
+{
+  "name": "campus-complaint-system",
+  "version": "1.0.0",
+  "description": "Simple campus complaint system (Node.js + Express + SQLite)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "jsonwebtoken": "^9.0.3"
+  }
+}
